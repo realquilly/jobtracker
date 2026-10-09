@@ -1,0 +1,33 @@
+@import "tailwindcss";
+@plugin "daisyui" {
+  themes: light --default, dark --prefersdark;
+}
+
+/* Global focus style: thin solid outline, no offset or glow. */
+:focus-visible,
+.input:focus,
+.input:focus-within,
+.select:focus,
+.select:focus-within,
+.textarea:focus {
+  outline: 1px solid var(--color-primary);
+  outline-offset: 0;
+  box-shadow: none;
+}
+
+/* Separate rule: if a browser drops :open, it must not take the rule above with it. */
+.select:open {
+  outline: 1px solid var(--color-primary);
+  outline-offset: 0;
+  box-shadow: none;
+}
+
+/* The bare input inside a daisyUI input wrapper; the wrapper draws the outline. */
+.input input:focus-visible {
+  outline: none;
+}
+
+@theme inline {
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
