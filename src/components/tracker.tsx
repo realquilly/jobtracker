@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { useApplications } from "@/lib/use-applications";
 import { UserMenu } from "./user-menu";
 import type { Application } from "@/lib/types";
@@ -13,7 +13,7 @@ const SORT_OPTIONS: { value: SortKey; label: string }[] = [
   { value: "added", label: "Recently added" },
   { value: "applied", label: "Date applied" },
   { value: "company", label: "Company (A–Z)" },
-  { value: "deadline", label: "Upcoming deadline" },
+  { value: "deadline", label: "Soonest date" },
 ];
 
 // Earliest deadline on a stage that still matters; "" sorts last.
@@ -26,16 +26,55 @@ const nextDeadline = (a: Application) =>
         .filter((d): d is string => !!d)
         .sort()[0] ?? "";
 
+// Fraction of the timeline filled in, matching what the card shows.
+const progress = (a: Application) => (a.currentStage + 1) / a.stages.length;
+
 const SORTERS: Record<SortKey, (a: Application, b: Application) => number> = {
   added: () => 0, // stored newest first
   applied: (a, b) => b.appliedOn.localeCompare(a.appliedOn),
   company: (a, b) => a.company.localeCompare(b.company),
   deadline: (a, b) => {
     const [x, y] = [nextDeadline(a), nextDeadline(b)];
-    if (!x || !y) return x ? -1 : y ? 1 : 0;
-    return x.localeCompare(y);
+    if (x && y) return x.localeCompare(y);
+    if (x || y) return x ? -1 : 1;
+    // Neither has a date: rejected last, then furthest along first.
+    if (!!a.rejected !== !!b.rejected) return a.rejected ? 1 : -1;
+    return progress(b) - progress(a);
   },
 };
+
+// The chosen sort is remembered in this browser.
+const SORT_STORAGE_KEY = "jobtracker:sort";
+const sortListeners = new Set<() => void>();
+
+const subscribeSort = (cb: () => void) => {
+  sortListeners.add(cb);
+  return () => {
+    sortListeners.delete(cb);
+  };
+};
+
+const readSort = () => {
+  try {
+    return localStorage.getItem(SORT_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+};
+
+function usePersistedSort() {
+  const raw = useSyncExternalStore(subscribeSort, readSort, () => null);
+  const sort = SORT_OPTIONS.find((o) => o.value === raw)?.value ?? "added";
+
+  const setSort = (next: SortKey) => {
+    try {
+      localStorage.setItem(SORT_STORAGE_KEY, next);
+    } catch {}
+    sortListeners.forEach((cb) => cb());
+  };
+
+  return [sort, setSort] as const;
+}
 
 export function Tracker({
   initialApps,
@@ -52,7 +91,7 @@ export function Tracker({
     app: null,
   });
   const [query, setQuery] = useState("");
-  const [sort, setSort] = useState<SortKey>("added");
+  const [sort, setSort] = usePersistedSort();
 
   const q = query.trim().toLowerCase();
   const visible = (
