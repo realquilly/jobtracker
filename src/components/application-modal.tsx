@@ -205,7 +205,7 @@ export function ApplicationModal({
                   <button
                     type="button"
                     className={`btn btn-square ${stage.details ? "" : "btn-ghost"}`}
-                    aria-label="Link and deadline"
+                    aria-label="Link and date"
                     aria-pressed={stage.details}
                     onClick={() => update({ details: !stage.details })}
                   >
@@ -247,10 +247,10 @@ export function ApplicationModal({
                     <DateInput
                       className="input-sm w-40"
                       clearable
-                      placeholder="Deadline"
+                      placeholder="Date"
                       value={stage.deadline ?? ""}
                       onChange={(deadline) => update({ deadline })}
-                      aria-label={`${stage.name || "Stage"} deadline`}
+                      aria-label={`${stage.name || "Stage"} date`}
                     />
                   </div>
                 )}

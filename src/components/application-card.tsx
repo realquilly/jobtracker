@@ -22,27 +22,30 @@ const urgency = (deadline: string) => {
     (new Date(deadline + "T00:00:00").getTime() - startOfToday.getTime()) /
       DAY_MS,
   );
-  if (days < 0) return { label: "Overdue", cls: "text-error", relative: true };
-  if (days === 0) return { label: "Due today", cls: "text-warning", relative: true };
-  if (days <= 2) return { label: `Due in ${days}d`, cls: "text-warning", relative: true };
-  return { label: "Due", cls: "text-base-content/60", relative: false };
+  if (days < 0) return { label: "Passed", cls: "text-error", relative: true };
+  if (days === 0) return { label: "Today", cls: "text-warning", relative: true };
+  if (days === 1) return { label: "Tomorrow", cls: "text-warning", relative: true };
+  if (days === 2) return { label: "In 2 days", cls: "text-warning", relative: true };
+  return { label: "", cls: "text-base-content/60", relative: false };
 };
 
 function StageLabel({
   stage,
   live,
+  done,
 }: {
   stage: Stage;
   live: boolean; // deadline still matters: stage not passed, not rejected
+  done: boolean; // stage already passed: no deadline shown
 }) {
   const href = safeLink(stage.link);
-  const due = stage.deadline
+  const due = stage.deadline && !done
     ? new Date(stage.deadline + "T00:00:00").toLocaleDateString(undefined, {
         day: "numeric",
         month: "short",
       })
     : null;
-  const u = stage.deadline && live ? urgency(stage.deadline) : null;
+  const u = due && stage.deadline && live ? urgency(stage.deadline) : null;
 
   return (
     <span className="flex flex-col items-center gap-0.5">
@@ -76,7 +79,7 @@ function StageLabel({
       )}
       {due && (
         <span className={`text-xs ${u?.cls ?? "text-base-content/50"}`}>
-          {u?.relative ? `${u.label} · ${due}` : `Due ${due}`}
+          {u?.relative ? `${u.label} · ${due}` : due}
         </span>
       )}
     </span>
@@ -174,6 +177,7 @@ export function ApplicationCard({
               <StageLabel
                 stage={s}
                 live={!app.rejected && i >= app.currentStage}
+                done={i < app.currentStage}
               />
             </li>
           ))}
