@@ -6,6 +6,7 @@ import { UserMenu } from "./user-menu";
 import type { Application } from "@/lib/types";
 import { ApplicationModal } from "./application-modal";
 import { ApplicationCard } from "./application-card";
+import { ConfirmDeleteModal } from "./confirm-delete-modal";
 
 type SortKey = "added" | "applied" | "company" | "deadline";
 
@@ -16,12 +17,12 @@ const SORT_OPTIONS: { value: SortKey; label: string }[] = [
   { value: "deadline", label: "Soonest date" },
 ];
 
-// Earliest deadline on a stage that still matters; "" sorts last.
+// Earliest date on a stage after the current one; "" sorts last.
 const nextDeadline = (a: Application) =>
   a.rejected
     ? ""
     : a.stages
-        .slice(a.currentStage)
+        .slice(a.currentStage + 1)
         .map((s) => s.deadline)
         .filter((d): d is string => !!d)
         .sort()[0] ?? "";
@@ -90,6 +91,11 @@ export function Tracker({
     open: false,
     app: null,
   });
+  // Same idea: keep the app after closing so the dialog text does not change.
+  const [deleting, setDeleting] = useState<{
+    open: boolean;
+    app: Application | null;
+  }>({ open: false, app: null });
   const [query, setQuery] = useState("");
   const [sort, setSort] = usePersistedSort();
 
@@ -203,7 +209,7 @@ export function Tracker({
                   )
                 }
                 onEdit={() => setModal({ open: true, app })}
-                onDelete={() => remove(app.id)}
+                onDelete={() => setDeleting({ open: true, app })}
               />
             ))}
           </div>
@@ -217,15 +223,19 @@ export function Tracker({
         onSubmit={(data) => {
           const editing = modal.app;
           if (editing) {
-            update(editing.id, {
-              ...data,
-              currentStage: Math.min(editing.currentStage, data.stages.length - 1),
-            });
+            update(editing.id, data);
           } else {
-            add({ ...data, id: crypto.randomUUID(), currentStage: 0 });
+            add({ ...data, id: crypto.randomUUID() });
           }
           setModal((m) => ({ ...m, open: false }));
         }}
+      />
+
+      <ConfirmDeleteModal
+        open={deleting.open}
+        company={deleting.app?.company ?? ""}
+        onClose={() => setDeleting((d) => ({ ...d, open: false }))}
+        onConfirm={() => deleting.app && remove(deleting.app.id)}
       />
 
       {error && (
