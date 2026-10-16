@@ -176,8 +176,8 @@ export function ApplicationCard({
             >
               <StageLabel
                 stage={s}
-                live={!app.rejected && i >= app.currentStage}
-                done={i < app.currentStage}
+                live={!app.rejected && i > app.currentStage}
+                done={i <= app.currentStage}
               />
             </li>
           ))}
