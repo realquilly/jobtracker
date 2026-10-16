@@ -12,11 +12,49 @@ const DEFAULT_STAGES: Stage[] = [
   "Offer",
 ].map((name) => ({ name }));
 
-// A stage being edited; `details` controls whether its link and deadline are shown.
-type DraftStage = Stage & { details: boolean };
+// A stage being edited. `details` controls whether its link and date are shown,
+// `origin` is its index before editing (so the current stage can follow it when
+// stages are reordered), and `uid` is a stable React key.
+type DraftStage = Stage & { details: boolean; origin: number | null; uid: number };
+
+let nextUid = 0;
+
+const newDraft = (): DraftStage => ({
+  name: "",
+  details: false,
+  origin: null,
+  uid: nextUid++,
+});
 
 const toDraft = (stages: Stage[]): DraftStage[] =>
-  stages.map((s) => ({ ...s, details: !!(s.link || s.deadline) }));
+  stages.map((s, i) => ({
+    ...s,
+    details: !!(s.link || s.deadline),
+    origin: i,
+    uid: nextUid++,
+  }));
+
+const GRIP_ICON = (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="16"
+    height="16"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden
+  >
+    <circle cx="9" cy="5" r="1" />
+    <circle cx="9" cy="12" r="1" />
+    <circle cx="9" cy="19" r="1" />
+    <circle cx="15" cy="5" r="1" />
+    <circle cx="15" cy="12" r="1" />
+    <circle cx="15" cy="19" r="1" />
+  </svg>
+);
 
 const normaliseLink = (link: string) =>
   /^https?:\/\//i.test(link) ? link : `https://${link}`;
@@ -35,7 +73,7 @@ export function ApplicationModal({
   onSubmit: (
     data: Pick<
       Application,
-      "company" | "logo" | "role" | "appliedOn" | "stages"
+      "company" | "logo" | "role" | "appliedOn" | "stages" | "currentStage"
     >,
   ) => void;
 }) {
@@ -43,7 +81,11 @@ export function ApplicationModal({
   const [logo, setLogo] = useState<string | undefined>();
   const [role, setRole] = useState("");
   const [appliedOn, setAppliedOn] = useState("");
-  const [stages, setStages] = useState<DraftStage[]>(toDraft(DEFAULT_STAGES));
+  const [stages, setStages] = useState<DraftStage[]>(() =>
+    toDraft(DEFAULT_STAGES),
+  );
+  const [dragFrom, setDragFrom] = useState<number | null>(null);
+  const [dragOver, setDragOver] = useState<number | null>(null);
   const dialogRef = useRef<HTMLDialogElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -73,8 +115,24 @@ export function ApplicationModal({
     } catch {}
   };
 
-  const cleanStages: Stage[] = stages
-    .filter((s) => s.name.trim())
+  const moveStage = (from: number, to: number) => {
+    if (from === to || to < 0 || to >= stages.length) return;
+    const next = stages.slice();
+    next.splice(to, 0, next.splice(from, 1)[0]);
+    setStages(next);
+  };
+
+  const keptStages = stages.filter((s) => s.name.trim());
+  // The current stage follows its stage when reordered; if it was removed, clamp.
+  const currentStage = (() => {
+    if (!initial) return 0;
+    const moved = keptStages.findIndex((s) => s.origin === initial.currentStage);
+    return moved >= 0
+      ? moved
+      : Math.min(initial.currentStage, keptStages.length - 1);
+  })();
+
+  const cleanStages: Stage[] = keptStages
     .map((s) => {
       // Hiding the details drops them on save.
       const link = s.details ? s.link?.trim() : undefined;
@@ -114,6 +172,7 @@ export function ApplicationModal({
             role: role.trim(),
             appliedOn,
             stages: cleanStages,
+            currentStage,
           });
         }}
       >
@@ -194,8 +253,51 @@ export function ApplicationModal({
             const update = (patch: Partial<DraftStage>) =>
               setStages(stages.map((s, j) => (j === i ? { ...s, ...patch } : s)));
             return (
-              <div key={i} className="space-y-2">
+              <div
+                key={stage.uid}
+                data-stage-row
+                className={`space-y-2 rounded-field ${
+                  dragFrom !== null && dragOver === i && dragFrom !== i
+                    ? "bg-base-200"
+                    : ""
+                }`}
+                onDragOver={(e) => {
+                  if (dragFrom === null) return;
+                  e.preventDefault();
+                  setDragOver(i);
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  if (dragFrom !== null) moveStage(dragFrom, i);
+                  setDragFrom(null);
+                  setDragOver(null);
+                }}
+              >
                 <div className="flex gap-2">
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    draggable
+                    aria-label="Reorder stage. Drag, or use the up and down arrow keys."
+                    className="flex w-6 shrink-0 cursor-grab items-center justify-center text-base-content/50 active:cursor-grabbing"
+                    onDragStart={(e) => {
+                      setDragFrom(i);
+                      e.dataTransfer.effectAllowed = "move";
+                      const row = e.currentTarget.closest("[data-stage-row]");
+                      if (row) e.dataTransfer.setDragImage(row, 16, 16);
+                    }}
+                    onDragEnd={() => {
+                      setDragFrom(null);
+                      setDragOver(null);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+                      e.preventDefault();
+                      moveStage(i, i + (e.key === "ArrowUp" ? -1 : 1));
+                    }}
+                  >
+                    {GRIP_ICON}
+                  </span>
                   <input
                     className="input input-bordered flex-1"
                     value={stage.name}
@@ -236,7 +338,7 @@ export function ApplicationModal({
                   </button>
                 </div>
                 {stage.details && (
-                  <div className="flex gap-2 border-l-2 border-base-300 pl-3">
+                  <div className="ml-8 flex gap-2 border-l-2 border-base-300 pl-3">
                     <input
                       className="input input-bordered input-sm flex-1"
                       value={stage.link ?? ""}
@@ -260,7 +362,7 @@ export function ApplicationModal({
           <button
             type="button"
             className="btn btn-ghost btn-sm"
-            onClick={() => setStages([...stages, { name: "", details: false }])}
+            onClick={() => setStages([...stages, newDraft()])}
           >
             + Add stage
           </button>
