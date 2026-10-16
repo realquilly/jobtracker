@@ -98,6 +98,11 @@ export function ApplicationCard({
   onDelete: () => void;
 }) {
   const fillClass = app.rejected ? "step-error" : "step-primary";
+  // The line into the stage after the current one is half filled, to show the
+  // application is between stages. Full class names so Tailwind picks them up.
+  const halfFillClass = app.rejected
+    ? "before:border-transparent before:[background:linear-gradient(to_right,var(--color-error)_50%,var(--color-base-300)_50%)]"
+    : "before:border-transparent before:[background:linear-gradient(to_right,var(--color-primary)_50%,var(--color-base-300)_50%)]";
   const applied = new Date(app.appliedOn + "T00:00:00").toLocaleDateString(
     undefined,
     { day: "numeric", month: "short", year: "numeric" },
@@ -172,7 +177,9 @@ export function ApplicationCard({
           {app.stages.map((s, i) => (
             <li
               key={i}
-              className={`step ${i <= app.currentStage ? fillClass : ""}`}
+              className={`step ${i <= app.currentStage ? fillClass : ""} ${
+                i === app.currentStage + 1 ? halfFillClass : ""
+              }`}
             >
               <StageLabel
                 stage={s}
